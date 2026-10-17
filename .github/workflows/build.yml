@@ -20,48 +20,22 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Create Android project around index.html
+      - name: Create Android project
         run: |
           test -f index.html
-          A=android
-          mkdir -p $A/app/src/main/assets $A/app/src/main/java/com/bags/app $A/app/src/main/res/values $A/app/src/main/res/drawable
-          cp index.html $A/app/src/main/assets/index.html
-
-          cat > $A/settings.gradle <<'EOF'
+          mkdir -p android/src/main/assets android/src/main/java/com/bags/app
+          cp index.html android/src/main/assets/index.html
+          cat > android/settings.gradle <<'EOF'
           pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
           }
           rootProject.name = 'BagsApp'
-          include ':app'
           EOF
-
-          cat > $A/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application' version '8.5.2' apply false
-          }
-          EOF
-
-          cat > $A/gradle.properties <<'EOF'
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=true
-          android.nonTransitiveRClass=true
-          EOF
-
-          cat > $A/app/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application'
-          }
+          cat > android/build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.5.2' }
           android {
               namespace 'com.bags.app'
               compileSdk 34
@@ -78,22 +52,16 @@ jobs:
               }
           }
           EOF
-
-          cat > $A/app/src/main/AndroidManifest.xml <<'EOF'
+          cat > android/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <application
-                  android:allowBackup="true"
-                  android:icon="@drawable/ic_launcher"
-                  android:label="@string/app_name"
+                  android:label="مبيعات الأكياس"
                   android:supportsRtl="true"
                   android:theme="@android:style/Theme.Material.Light.NoActionBar">
-                  <activity
-                      android:name=".MainActivity"
-                      android:configChanges="orientation|screenSize|keyboardHidden"
-                      android:exported="true"
-                      android:windowSoftInputMode="adjustResize">
+                  <activity android:name=".MainActivity" android:exported="true"
+                      android:configChanges="orientation|screenSize|keyboardHidden">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -102,23 +70,32 @@ jobs:
               </application>
           </manifest>
           EOF
-
-          cat > $A/app/src/main/java/com/bags/app/MainActivity.java <<'EOF'
+          cat > android/src/main/java/com/bags/app/MainActivity.java <<'EOF'
           package com.bags.app;
-
           import android.app.Activity;
           import android.os.Bundle;
-          import android.webkit.WebSettings;
           import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-
           public class MainActivity extends Activity {
-              private WebView web;
-
               @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  web = new WebView(this);
-                  setContentView(web);
-                  WebSettings s = web.getSettings();
-                  s.setJav
+              protected void onCreate(Bundle b) {
+                  super.onCreate(b);
+                  WebView w = new WebView(this);
+                  w.getSettings().setJavaScriptEnabled(true);
+                  w.getSettings().setDomStorageEnabled(true);
+                  setContentView(w);
+                  w.loadUrl("file:///android_asset/index.html");
+              }
+          }
+          EOF
+
+      - name: Accept licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+
+      - name: Build debug APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bags-app-apk
+          path: android/build/outputs/apk/debug/*.apk
